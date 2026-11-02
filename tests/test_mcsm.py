@@ -47,7 +47,7 @@ class BlowfishTests(unittest.TestCase):
 
     def test_modified_variant_roundtrip_and_kat(self):
         cipher = Blowfish(b"Mcsm")
-        # Locked regression value from this port of the reference implementation.
+        # Locked regression value from this implementation of the v7 cipher.
         self.assertEqual(cipher.encrypt(b"A" * 16).hex(), "3d6d2241fc47bfbc3d6d2241fc47bfbc")
         plain = bytes(range(256))
         self.assertEqual(cipher.decrypt(cipher.encrypt(plain)), plain)
