@@ -1,119 +1,161 @@
 # mcsm-sdk
 
-Read, extract and rebuild **Minecraft: Story Mode Season 1** `.ttarch2` archives.
+A Python tool for reading, extracting, and rebuilding **Minecraft: Story Mode** `.ttarch2` archives.
 
-This is the foundation layer for modding: any texture, dialogue or script mod
-ultimately has to go back into one of these archives. Nothing here modifies the
-game's memory or executable, and no game files are included.
+Minecraft: Story Mode stores most of its game files, including textures, dialogue, and scripts, inside these archives. This makes them an important part of the modding process.
 
+`mcsm-sdk` lets you open these archives, extract their contents, make changes, and pack everything back into a new archive. It only works with archive files and does not modify the game executable or interact with the game while it is running. No game files or assets are included.
+
+## Quick start
+
+```bash
+python -m mcsm list MCSM_pc_Boot_data.ttarch2
+python -m mcsm extract MCSM_pc_Boot_data.ttarch2 work/
+
+# Make your changes inside the work/ folder
+
+python -m mcsm pack work/ modded.ttarch2 --like MCSM_pc_Boot_data.ttarch2
 ```
-python -m mcsm list    episode.ttarch2
-python -m mcsm extract episode.ttarch2 work/
-# ...edit files in work/...
-python -m mcsm pack    work/ modded.ttarch2 --like episode.ttarch2
+
+The `--like` option uses the original archive's version, encryption key, and compression settings. This helps make sure the rebuilt archive uses the same format as the original.
+
+Always keep a backup of the original archive before replacing it.
+
+Once installed, you can also use `mcsm` directly instead of running it through Python.
+
+## Installation
+
+You'll need Python 3.10 or newer. There are no required third-party dependencies.
+
+```bash
+pip install .
 ```
 
-Then point the game at `modded.ttarch2` in place of the original (keep a
-backup; see *Caveats*).
+For faster encryption and decryption, you can install the optional NumPy dependency:
 
-## Install
-
-Python 3.10+. No required third-party packages:
-
+```bash
+pip install ".[fast]"
 ```
+
+The NumPy implementation is roughly 25 times faster in testing, reaching around 15 MB/s compared to 0.6 MB/s without it. This is especially useful when working with larger archives.
+
+For development, install the package in editable mode and run the test suite:
+
+```bash
 pip install -e .
+python -m unittest discover -s tests
 ```
 
-`numpy` is optional and makes the cipher much faster on large archives
-(measured here: ~15 MB/s vs ~0.6 MB/s in pure Python):
+## Using the library
 
-```
-pip install -e ".[fast]"
-```
-
-## Library
+You can also use `mcsm-sdk` directly in your own Python projects.
 
 ```python
 from mcsm import Archive
 
-with Archive.open("episode.ttarch2") as archive:      # key defaults to the MCSM key
-    print(archive.names()[:5])
-    data = archive.read("textures/block.d3dtx")
+with Archive.open("MCSM_pc_Boot_data.ttarch2") as archive:
+    print(archive.names())
+    data = archive.read("boot.lua")
     archive.extract_all("work")
 
-# Rebuild, copying the source archive's version/key/encryption settings:
-with Archive.open("episode.ttarch2") as source:
+# Reuse the original archive's settings when rebuilding.
+with Archive.open("MCSM_pc_Boot_data.ttarch2") as source:
     settings = source.settings()
-Archive.create("modded.ttarch2", [("textures/block.d3dtx", new_bytes)], **settings)
+
+Archive.create("modded.ttarch2", [("boot.lua", new_bytes)], **settings)
 ```
 
-`Archive.create(path, files, key=..., version=4, compress=True, encrypt=True)`
-takes `(name, bytes_or_path)` pairs. `pack_directory()` archives a folder tree.
+`Archive.create()` accepts a list of `(name, bytes_or_path)` pairs. You can also use `pack_directory()` to package an entire directory into an archive.
 
-## What is supported
+The method supports the following options:
 
-| | Read | Write |
-|---|---|---|
-| TTA3 | yes | yes |
-| TTA4 (this game build) | yes | yes |
-| TTCN plain | yes | yes |
-| TTCE encrypted + DEFLATE | yes | yes |
-| TTCZ DEFLATE | yes | yes |
-| Oodle (lowercase TTCe / TTCz, codec 1) | **no** — clear error | no |
-| TTA2 | no | no |
+```python
+Archive.create(
+    path,
+    files,
+    key=...,
+    version=4,
+    compress=True,
+    encrypt=True
+)
+```
 
-Archives store no key; the default is the retail Minecraft: Story Mode key, a
-55-byte binary blob (not the ASCII `Mcsm` some profile lists show), taken from
-the public per-game key table in the Keyaku `ttarchext` fork. Pass `key=` or the
-CLI `--key` for anything else.
+## Supported formats
 
-## Caveats
+The tool currently supports the following archive types:
 
-- **Verified against the retail game.** All 174 `.ttarch2` archives in the
-  installed game open (194,419 entries total), and a real 1.2 MB archive was
-  extracted, repacked and re-extracted with every file byte-identical. The
-  modified ("version 7") Blowfish is implemented from the published algorithm;
-  the standard variant is checked against pycryptodome.
-- Lua entries in this build are **bytecode**, not source: they start with
-  Telltale's `\x1bLEnX` header. Extracting them gives a valid file, but editing
-  means disassembling the bytecode, not editing text.
-- File data is decoded lazily from a memory map, so extracting a multi-GB
-  archive does not load it all into RAM. `create()` spools the inner payload to
-  a temp file for the same reason.
-- Entry names are ASCII. Extraction refuses names that would escape the output
-  directory.
-- The writer matches the observed retail layout: uppercase `TTCE`/`TTCZ` with no
-  codec word, absolute chunk offsets, TTA4 entries, zero-padded final chunk.
+| Container | Read | Write | Notes |
+|---|---|---|---|
+| TTCN | Yes | Yes | Uncompressed payload |
+| TTCE | Yes | Yes | Blowfish v7 + DEFLATE |
+| TTCZ | Yes | Yes | DEFLATE, no encryption |
+| TTCe / TTCz | No | No | Lowercase tags use a codec field; Oodle is not supported |
+| TTA3 / TTA4 | Yes | Yes | Supports both inner index layouts |
+
+### Testing and compatibility
+
+The tool has been tested against 174 retail archives from the current game build, containing a total of 194,419 entries.
+
+A separate 1.2 MB archive was also tested through a complete extract, rebuild, and extraction cycle. All files matched byte for byte.
+
+The archive key is included by default. The current game build uses a 55-byte binary Blowfish key rather than the ASCII `Mcsm` value listed in some profiles.
+
+The default key comes from the public per-game key table in the Keyaku `ttarchext` fork. You can provide a different key using `key=` in Python or `--key` from the command line.
+
+### Lua files
+
+One important thing to know is that Lua files inside these archives are not ordinary text files.
+
+They start with Telltale's `\x1bLEnX` header, which identifies them as compiled bytecode. You can extract them normally, but editing their contents requires disassembling and reassembling the bytecode rather than opening them in a regular text editor.
+
+## Verification and limitations
+
+Some additional details about how the tool works:
+
+- All 174 `.ttarch2` archives in the installed game have been opened successfully.
+- The Blowfish v7 cipher is implemented using the published algorithm. The standard variant is tested against PyCryptodome, and the v7 variant has a fixed known-answer test.
+- Archive reading uses `mmap`, so even multi-gigabyte archives don't need to be loaded entirely into memory.
+- Archive writing uses a temporary file to spool the payload.
+- Entry names are ASCII.
+- Extraction includes path checks to prevent files from being written outside the selected output directory.
+
+### Not currently supported
+
+- Oodle compression.
+- TTA2 archives.
+- Game runtime modifications.
+- Scene loading, game hooks, or camera controls.
+
+The project is focused on archive handling rather than modifying or interacting with the running game.
 
 ## License and legal
 
-Licensed under the **MIT** license; see `LICENSE`. The cipher is an independent
-Python implementation of the published Blowfish algorithm and the functional
-changes Telltale applied. Its P/S boxes are Bruce Schneier's public-domain
-constants, and the container layout comes from public community documentation.
-No C source from the reference tools is copied into this repository.
+The Blowfish implementation is written independently in Python using the published algorithm and the modifications made by Telltale.
 
-- Not affiliated with, endorsed by, or supported by Telltale Games, Mojang, or
-  Microsoft. "Minecraft" and "Minecraft: Story Mode" are trademarks of their
-  owners.
-- No game code, assets, or archives are included or downloaded. You need your
-  own copy of the game, and you are responsible for what you do with it.
-- Do not redistribute extracted assets or repacked archives that contain them.
-- The repository contains the archive decryption key so the tool can read files
-  you already own. Rights holders: open an issue and the key will be removed.
+The P/S boxes use Bruce Schneier's public-domain constants, and the archive format implementation is based on publicly available community documentation. No C source code from the reference tools has been copied into this project.
+
+A few things to keep in mind:
+
+- This project is not affiliated with, endorsed by, or supported by Telltale Games, Mojang, or Microsoft.
+- Minecraft and Minecraft: Story Mode are trademarks of their respective owners.
+- No game code, assets, or archives are included. You must own your own copy of the game.
+- You are responsible for how you use the tool and any files you create with it.
+- Please do not redistribute extracted game assets or rebuilt archives containing those assets.
+- The repository includes the archive key so the tool can access archives you already own. Rights holders can open an issue to request its removal.
 
 ## AI disclosure
 
-This project was written with an AI coding assistant: **DeepSeek V4.1 Flash
-Free**, running in OpenCode. The assistant produced the code, tests and
-documentation under human direction. Format research, real-archive verification,
-and all release decisions were directed and reviewed by the repository owner.
-AI output can be wrong; treat the code as you would any unreviewed contribution
-and run the tests before relying on it.
+This project was developed with help from **DeepSeek V4.1 Flash Free** through OpenCode.
 
-## Format references
+The AI assistant helped produce the code, tests, and documentation under human direction. Research into the archive format, testing against retail game files, and final release decisions were handled and reviewed by the repository owner.
 
-- [Telltale-Modding-Group/ttarch-docs](https://github.com/Telltale-Modding-Group/ttarch-docs) — container/name-table layout
-- [slankka/ttarchext2](https://github.com/slankka/ttarchext2) — rebuild path, Blowfish v7, chunk table
-- [iMrShadow/TelltaleToolKit](https://github.com/iMrShadow/TelltaleToolKit) — reader and CRC64 definition, game profiles
-- [Keyaku/ttarchext](https://github.com/Keyaku/ttarchext) fork — per-game binary key table (source of the MCSM key)
+AI-generated code and documentation can contain mistakes, so users are encouraged to review the implementation and run the included tests.
+
+## References
+
+The project builds on publicly available research and community documentation:
+
+- [ttarch-docs](https://github.com/Telltale-Modding-Group/ttarch-docs) - Archive container and name-table documentation.
+- [slankka/ttarchext2](https://github.com/slankka/ttarchext2) - Rebuilding process, Blowfish v7, and chunk table research.
+- [TelltaleToolKit](https://github.com/iMrShadow/TelltaleToolKit) - Archive reader, CRC64, and game profiles.
+- [Keyaku/ttarchext](https://github.com/Keyaku/ttarchext) - Public per-game archive key table.
