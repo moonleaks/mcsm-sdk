@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Never commit game data or extracted assets
+*.ttarch
+*.ttarch2
+demo/
+work/
+out/
