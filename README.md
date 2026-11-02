@@ -1,6 +1,6 @@
 # mcsm-sdk
 
-Read, extract and rebuild **Minecraft: Story Mode** `.ttarch2` archives.
+Read, extract and rebuild **Minecraft: Story Mode Season 1** `.ttarch2` archives.
 
 This is the foundation layer for modding: any texture, dialogue or script mod
 ultimately has to go back into one of these archives. Nothing here modifies the
