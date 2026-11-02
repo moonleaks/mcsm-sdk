@@ -72,8 +72,8 @@ CLI `--key` for anything else.
 - **Verified against the retail game.** All 174 `.ttarch2` archives in the
   installed game open (194,419 entries total), and a real 1.2 MB archive was
   extracted, repacked and re-extracted with every file byte-identical. The
-  modified ("version 7") Blowfish is a port of the reference implementation; the
-  standard variant is checked against pycryptodome.
+  modified ("version 7") Blowfish is implemented from the published algorithm;
+  the standard variant is checked against pycryptodome.
 - Lua entries in this build are **bytecode**, not source: they start with
   Telltale's `\x1bLEnX` header. Extracting them gives a valid file, but editing
   means disassembling the bytecode, not editing text.
@@ -87,9 +87,11 @@ CLI `--key` for anything else.
 
 ## License and legal
 
-Licensed under **GPL-2.0-or-later**; see `LICENSE`. The v7 cipher is a port of
-the GPL-2.0+ `ttarchext` code by Luigi Auriemma, so the project as a whole is
-GPL rather than a more permissive license.
+Licensed under the **MIT** license; see `LICENSE`. The cipher is an independent
+Python implementation of the published Blowfish algorithm and the functional
+changes Telltale applied. Its P/S boxes are Bruce Schneier's public-domain
+constants, and the container layout comes from public community documentation.
+No C source from the reference tools is copied into this repository.
 
 - Not affiliated with, endorsed by, or supported by Telltale Games, Mojang, or
   Microsoft. "Minecraft" and "Minecraft: Story Mode" are trademarks of their

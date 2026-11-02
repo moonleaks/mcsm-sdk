@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: MIT
 """Telltale's modified Blowfish (archive "version 7" variant).
 
 Differs from standard Blowfish in three places, all of which are needed to

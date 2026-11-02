@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: MIT
 """CRC64 (ECMA-182 polynomial, init 0, no final xor) as used for ttarch names."""
 
 MASK64 = (1 << 64) - 1

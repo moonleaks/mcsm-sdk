@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: MIT
 """Read and rebuild Telltale ``.ttarch2`` archives (TTA3/TTA4).
 
 Layout (all little-endian), verified against the retail game files:

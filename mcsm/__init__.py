@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
+# SPDX-License-Identifier: MIT
 """Minimal modding SDK for Minecraft: Story Mode archives."""
 
 from .blowfish import Blowfish
