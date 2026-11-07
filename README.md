@@ -20,6 +20,28 @@ python -m mcsm pack    work/ modded.ttarch2 --like MCSM_pc_Boot_data.ttarch2
 the result matches what the game expects. Keep a copy of the original before you
 replace anything. After `pip install`, `mcsm` works as a command too.
 
+### Narrowing and batching
+
+`--filter` takes a case-insensitive glob, repeatable, and works on both `list`
+and `extract`:
+
+```
+# just the textures from one archive
+mcsm extract MCSM_pc_Boot_txmesh.ttarch2 work/ --filter "*.d3dtx"
+
+# which archives contain a given file? (no filter = one summary line each)
+mcsm list "…/archives/" --filter "*.lua"
+
+# pull the same subset out of every archive
+mcsm extract "…/archives/" work/ --filter "*.d3dtx" --filter "*.d3dmesh"
+```
+
+Passing a **directory** to `list` prints a per-archive summary instead of every
+entry, because a full install has ~194,000 files. Batch `extract` writes each
+archive into its own subfolder (`work/<archive name>/…`), so identical names in
+different episodes cannot collide. A filter that matches nothing exits with an
+error instead of silently writing an empty tree.
+
 ## Install
 
 Python 3.10 or newer. Nothing else is required:
@@ -81,7 +103,11 @@ them means disassembling and reassembling bytecode, not opening a text editor.
 
 ## Verification and limits
 
-- All 174 `.ttarch2` files in the installed game open without error.
+- All 174 `.ttarch2` files in the installed game open without error, both
+  individually and as one directory listing (194,419 entries).
+- A filtered extract of a retail archive produced 21 files byte-identical to a
+  full extraction of the same archive, and a two-archive batch extract matched
+  `Archive.read()` for every file.
 - The v7 cipher is implemented from the published algorithm; the standard
   variant is tested against pycryptodome and the v7 variant has a locked known
   answer test.

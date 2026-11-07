@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: MIT
+import contextlib
+import io
 import struct
 import tempfile
 import unittest
 import zlib
 from pathlib import Path
 
+from mcsm.__main__ import main
 from mcsm.blowfish import _HAS_NUMPY, Blowfish
 from mcsm.crc64 import MASK64, crc64
 from mcsm.ttarch import Archive, ArchiveError
@@ -171,6 +174,72 @@ class ArchiveTests(unittest.TestCase):
         path.write_bytes(b"zCTT" + struct.pack("<III", 1, 0x10000, 1) + b"\0" * 16)
         with self.assertRaisesRegex(ArchiveError, "Oodle"):
             Archive.open(path)
+
+
+class CliTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.files = [("a.d3dtx", b"TEX"), ("b.lua", b"print(1)"),
+                      ("sub/c.d3dtx", b"T")]
+        self.archive = self.tmp / "ep.ttarch2"
+        Archive.create(self.archive, self.files)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _run(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = main(argv)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_list_filter_keeps_only_matches(self):
+        code, out, _ = self._run(["list", str(self.archive), "--filter", "*.D3DTX"])
+        self.assertEqual(code, 0)
+        self.assertIn("a.d3dtx", out)
+        self.assertIn("sub/c.d3dtx", out)
+        self.assertNotIn("b.lua", out)
+        self.assertIn("2 of 3 files", out)
+
+    def test_extract_filter_writes_only_matches(self):
+        target = self.tmp / "out"
+        code, _, _ = self._run(["extract", str(self.archive), str(target),
+                                "--filter", "*.d3dtx"])
+        self.assertEqual(code, 0)
+        self.assertEqual((target / "a.d3dtx").read_bytes(), b"TEX")
+        self.assertEqual((target / "sub" / "c.d3dtx").read_bytes(), b"T")
+        self.assertFalse((target / "b.lua").exists())
+
+    def test_directory_batch_summarises_every_archive(self):
+        archives = self.tmp / "archives"
+        archives.mkdir()
+        Archive.create(archives / "one.ttarch2", self.files)
+        Archive.create(archives / "two.ttarch2", [("only.lua", b"x")])
+        code, out, _ = self._run(["list", str(archives), "--filter", "*.lua"])
+        self.assertEqual(code, 0)
+        self.assertIn("one.ttarch2", out)
+        self.assertIn("two.ttarch2", out)
+        self.assertIn("2 of 4 files matched in 2 archives", out)
+
+    def test_directory_batch_extracts_into_per_archive_folders(self):
+        archives = self.tmp / "archives"
+        archives.mkdir()
+        Archive.create(archives / "one.ttarch2", self.files)
+        Archive.create(archives / "two.ttarch2", [("only.lua", b"x")])
+        target = self.tmp / "out"
+        code, _, _ = self._run(["extract", str(archives), str(target),
+                                "--filter", "*.lua"])
+        self.assertEqual(code, 0)
+        self.assertEqual((target / "one" / "b.lua").read_bytes(), b"print(1)")
+        self.assertEqual((target / "two" / "only.lua").read_bytes(), b"x")
+        self.assertFalse((target / "one" / "a.d3dtx").exists())
+
+    def test_filter_matching_nothing_is_an_error(self):
+        code, _, err = self._run(["extract", str(self.archive), str(self.tmp / "out"),
+                                  "--filter", "*.nomatch"])
+        self.assertEqual(code, 1)
+        self.assertIn("no entries matched", err)
 
 
 if __name__ == "__main__":
